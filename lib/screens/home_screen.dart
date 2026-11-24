@@ -1,248 +1,413 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import '../models/transaction.dart';
 import '../services/transaction_store.dart';
-import 'add_transaction_screen.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, required this.store});
+
   final TransactionStore store;
 
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  static const _currency = '\$';
-
-  @override
-  void initState() {
-    super.initState();
-    widget.store.addListener(_refresh);
+  String money(double amount) {
+    return NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: '₹',
+      decimalDigits: 2,
+    ).format(amount);
   }
 
-  @override
-  void dispose() {
-    widget.store.removeListener(_refresh);
-    super.dispose();
+  Future<void> addTransaction(BuildContext context) async {
+    final titleController = TextEditingController();
+    final amountController = TextEditingController();
+
+    final formKey = GlobalKey<FormState>();
+    var type = TransactionType.expense;
+    var category = 'Food';
+    var date = DateTime.now();
+
+    final categories = [
+      'Food',
+      'Travel',
+      'Books',
+      'Fees',
+      'Shopping',
+      'Pocket Money',
+      'Other',
+    ];
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Add Transaction'),
+              content: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DropdownButtonFormField<TransactionType>(
+                        value: type,
+                        decoration: const InputDecoration(
+                          labelText: 'Transaction type',
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: TransactionType.expense,
+                            child: Text('Expense'),
+                          ),
+                          DropdownMenuItem(
+                            value: TransactionType.income,
+                            child: Text('Income'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setDialogState(() => type = value);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: titleController,
+                        decoration: const InputDecoration(
+                          labelText: 'Description',
+                          hintText: 'e.g. Lunch',
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Enter a description';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: amountController,
+                        keyboardType:
+                            const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Amount',
+                          prefixText: '₹ ',
+                        ),
+                        validator: (value) {
+                          final amount = double.tryParse(
+                            value?.trim() ?? '',
+                          );
+
+                          if (amount == null || amount <= 0) {
+                            return 'Enter a valid amount';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: category,
+                        decoration: const InputDecoration(
+                          labelText: 'Category',
+                        ),
+                        items: categories.map((item) {
+                          return DropdownMenuItem(
+                            value: item,
+                            child: Text(item),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setDialogState(() => category = value);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final selected = await showDatePicker(
+                            context: context,
+                            initialDate: date,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2100),
+                          );
+
+                          if (selected != null) {
+                            setDialogState(() => date = selected);
+                          }
+                        },
+                        icon: const Icon(Icons.calendar_month),
+                        label: Text(
+                          DateFormat('dd MMM yyyy').format(date),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    if (!formKey.currentState!.validate()) return;
+
+                    final transaction = WalletTransaction(
+                      id: DateTime.now()
+                          .microsecondsSinceEpoch
+                          .toString(),
+                      title: titleController.text.trim(),
+                      category: category,
+                      amount: double.parse(amountController.text.trim()),
+                      date: date,
+                      type: type,
+                    );
+
+                    await store.add(transaction);
+
+                    if (dialogContext.mounted) {
+                      Navigator.pop(dialogContext);
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    titleController.dispose();
+    amountController.dispose();
   }
-
-  void _refresh() => setState(() {});
-
-  String money(double value) => '$_currency${value.toStringAsFixed(2)}';
 
   @override
   Widget build(BuildContext context) {
-    final store = widget.store;
-    final budget = 500.0;
-    final progress = (store.totalExpenses / budget).clamp(0.0, 1.0);
-
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF7F7FC),
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Student Wallet AI', style: TextStyle(fontWeight: FontWeight.w800)),
-            Text('Your money, made clearer', style: TextStyle(fontSize: 12, color: Colors.black54)),
-          ],
+        title: const Text(
+          'Student Wallet',
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
-            tooltip: 'Profile (coming soon)',
-            onPressed: () => _message('Profile settings will be added next.'),
-            icon: const CircleAvatar(
-              radius: 17,
-              backgroundColor: Color(0xFFE9E5FF),
-              child: Icon(Icons.person_outline, color: Color(0xFF6657D9)),
-            ),
+            onPressed: () => addTransaction(context),
+            icon: const Icon(Icons.add_circle_outline),
+            tooltip: 'Add transaction',
           ),
-          const SizedBox(width: 8),
         ],
       ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 100),
-          children: [
-            _balanceCard(store),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(child: _summaryCard('Income', store.totalIncome, Icons.south_west, const Color(0xFF15966B))),
-                const SizedBox(width: 12),
-                Expanded(child: _summaryCard('Expenses', store.totalExpenses, Icons.north_east, const Color(0xFFE16B6B))),
-              ],
-            ),
-            const SizedBox(height: 22),
-            _sectionTitle('Monthly budget', 'Edit later'),
-            const SizedBox(height: 10),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
+      body: AnimatedBuilder(
+        animation: store,
+        builder: (context, child) {
+          final transactions = store.transactions;
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFF6657D9),
+                      Color(0xFF8978EF),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(22),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Monthly spending limit', style: TextStyle(fontWeight: FontWeight.w600)),
-                        Text(money(budget), style: const TextStyle(fontWeight: FontWeight.w800)),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: LinearProgressIndicator(
-                        value: progress,
-                        minHeight: 10,
-                        backgroundColor: const Color(0xFFECEAF5),
-                        color: progress >= 1 ? Colors.redAccent : const Color(0xFF6657D9),
+                    const Text(
+                      'Available Balance',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 15,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Text('${(progress * 100).round()}% used • ${money((budget - store.totalExpenses).clamp(0, budget))} left in budget',
-                        style: const TextStyle(color: Colors.black54, fontSize: 12)),
+                    Text(
+                      money(store.balance),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 30,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _BalanceItem(
+                            label: 'Income',
+                            amount: money(store.totalIncome),
+                            icon: Icons.arrow_downward,
+                          ),
+                        ),
+                        Expanded(
+                          child: _BalanceItem(
+                            label: 'Expenses',
+                            amount: money(store.totalExpenses),
+                            icon: Icons.arrow_upward,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 22),
-            _sectionTitle('Recent transactions', 'Latest first'),
-            const SizedBox(height: 10),
-            if (store.transactions.isEmpty)
-              _emptyState()
-            else
-              ...store.transactions.take(8).map(_transactionTile),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _addTransaction,
-        backgroundColor: const Color(0xFF6657D9),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Add transaction'),
-      ),
-    );
-  }
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Recent Transactions',
+                    style: TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text('${transactions.length} records'),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (transactions.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.account_balance_wallet_outlined,
+                        size: 55,
+                        color: Colors.grey,
+                      ),
+                      SizedBox(height: 12),
+                      Text(
+                        'No transactions yet',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 6),
+                      Text('Tap + to add your first transaction.'),
+                    ],
+                  ),
+                )
+              else
+                ...transactions.map((transaction) {
+                  final isIncome =
+                      transaction.type == TransactionType.income;
 
-  Widget _balanceCard(TransactionStore store) {
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF7162E8), Color(0xFF5144B8)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('AVAILABLE BALANCE', style: TextStyle(color: Colors.white70, fontSize: 11, letterSpacing: 1.2)),
-          const SizedBox(height: 8),
-          Text(money(store.balance), style: const TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 18),
-          const Row(
-            children: [
-              Icon(Icons.auto_awesome, color: Color(0xFFFFE7A3), size: 17),
-              SizedBox(width: 7),
-              Text('Small steps make smarter money habits', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: isIncome
+                            ? Colors.green.shade50
+                            : Colors.red.shade50,
+                        child: Icon(
+                          isIncome
+                              ? Icons.arrow_downward
+                              : Icons.arrow_upward,
+                          color: isIncome ? Colors.green : Colors.red,
+                        ),
+                      ),
+                      title: Text(
+                        transaction.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${transaction.category} • '
+                        '${DateFormat('dd MMM yyyy').format(transaction.date)}',
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${isIncome ? '+' : '-'}'
+                            '${money(transaction.amount)}',
+                            style: TextStyle(
+                              color: isIncome ? Colors.green : Colors.red,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          PopupMenuButton<String>(
+                            onSelected: (value) async {
+                              if (value == 'delete') {
+                                await store.delete(transaction.id);
+                              }
+                            },
+                            itemBuilder: (context) => const [
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Text('Delete'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _summaryCard(String title, double amount, IconData icon, Color color) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(15),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color),
-            const SizedBox(height: 10),
-            Text(title, style: const TextStyle(color: Colors.black54, fontSize: 12)),
-            const SizedBox(height: 3),
-            Text(money(amount), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _sectionTitle(String title, String trailing) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-        Text(trailing, style: const TextStyle(color: Colors.black45, fontSize: 11)),
-      ],
-    );
-  }
-
-  Widget _emptyState() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            const Icon(Icons.receipt_long_outlined, size: 36, color: Color(0xFF8D84D8)),
-            const SizedBox(height: 10),
-            const Text('No transactions yet', style: TextStyle(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 4),
-            const Text('Add your first expense or income to get started.',
-                textAlign: TextAlign.center, style: TextStyle(color: Colors.black54, fontSize: 12)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _transactionTile(WalletTransaction transaction) {
-    final isIncome = transaction.type == TransactionType.income;
-    return Card(
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: isIncome ? const Color(0xFFE2F5EC) : const Color(0xFFFFEAEA),
-          child: Icon(isIncome ? Icons.south_west : Icons.north_east,
-              color: isIncome ? const Color(0xFF15966B) : const Color(0xFFE16B6B)),
-        ),
-        title: Text(transaction.title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text('${transaction.category} • ${DateFormat.yMMMd().format(transaction.date)}'),
-        trailing: Text(
-          '${isIncome ? '+' : '-'}${money(transaction.amount)}',
-          style: TextStyle(fontWeight: FontWeight.w800, color: isIncome ? const Color(0xFF15966B) : Colors.black87),
-        ),
-        onLongPress: () async {
-          final shouldDelete = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Delete transaction?'),
-              content: const Text('This removes the entry from this device.'),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
-              ],
-            ),
           );
-          if (shouldDelete == true) await widget.store.delete(transaction.id);
         },
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => addTransaction(context),
+        icon: const Icon(Icons.add),
+        label: const Text('Add'),
+      ),
     );
   }
+}
 
-  Future<void> _addTransaction() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => AddTransactionScreen(store: widget.store)),
+class _BalanceItem extends StatelessWidget {
+  const _BalanceItem({
+    required this.label,
+    required this.amount,
+    required this.icon,
+  });
+
+  final String label;
+  final String amount;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.white, size: 19),
+        const SizedBox(width: 7),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                amount,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
-  }
-
-  void _message(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 }
