@@ -4,8 +4,10 @@ import 'services/transaction_store.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   final store = TransactionStore();
   await store.load();
+
   runApp(StudentWalletApp(store: store));
 }
 
@@ -17,14 +19,18 @@ class StudentWalletApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const seed = Color(0xFF6657D9);
+
     return MaterialApp(
       title: 'Student Wallet AI',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.light),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: seed,
+          brightness: Brightness.light,
+        ),
         scaffoldBackgroundColor: const Color(0xFFF7F7FC),
-        cardTheme: const CardTheme(
+        cardTheme: const CardThemeData(
           elevation: 0,
           color: Colors.white,
           margin: EdgeInsets.zero,
