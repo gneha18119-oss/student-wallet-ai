@@ -1,6 +1,6 @@
 workflows:
   android-workflow:
-    name: Student Wallet AI Android Build
+    name: Student Wallet AI Android APK
     max_build_duration: 60
     instance_type: mac_mini_m2
 
@@ -8,11 +8,33 @@ workflows:
       flutter: stable
 
     scripts:
-      - name: Get Flutter packages
-        script: flutter pub get
+      - name: Check Flutter project
+        script: |
+          set -e
+          echo "Checking project files..."
+          if [ ! -f pubspec.yaml ]; then
+            echo "ERROR: pubspec.yaml not found in repository root"
+            exit 1
+          fi
+          echo "Flutter project found."
+
+      - name: Generate Android folder
+        script: |
+          set -e
+          flutter create . --platforms=android
+          echo "Android folder generated."
+          ls -la android/app/
+
+      - name: Get Flutter dependencies
+        script: |
+          set -e
+          flutter pub get
 
       - name: Build Android APK
-        script: flutter build apk --release
+        script: |
+          set -e
+          flutter build apk --release
 
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
+      - /tmp/xcodebuild_logs/*.log
